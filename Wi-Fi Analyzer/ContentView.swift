@@ -47,14 +47,6 @@ struct ContentView: View {
             .navigationTitle("Wi-Fi Analyzer")
             .toolbar {
                 ToolbarItemGroup {
-                    if scanner.locationAuthorizationStatus == .notDetermined {
-                        Button {
-                            scanner.requestLocationPermission()
-                        } label: {
-                            Label("Allow Location", systemImage: "location")
-                        }
-                    }
-
                     Button {
                         scanner.scan()
                     } label: {
