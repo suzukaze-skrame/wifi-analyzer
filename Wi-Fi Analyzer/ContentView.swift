@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @Environment(\.openURL) private var openURL
+    @AppStorage(AppLanguage.storageKey) private var selectedLanguage = AppLanguage.system.rawValue
     @StateObject private var scanner = WiFiScanner()
     @State private var searchText = ""
     @State private var selectedBand: WiFiBand?
@@ -10,6 +11,10 @@ struct ContentView: View {
         KeyPathComparator(\WiFiNetwork.rssi, order: .reverse)
     ]
     @Namespace private var filterGlassNamespace
+
+    private var appLanguage: AppLanguage {
+        AppLanguage(rawValue: selectedLanguage) ?? .system
+    }
 
     private var filteredNetworks: [WiFiNetwork] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -20,8 +25,8 @@ struct ContentView: View {
         guard !query.isEmpty else { return bandFilteredNetworks }
 
         return bandFilteredNetworks.filter { network in
-            network.displaySSID.localizedCaseInsensitiveContains(query)
-                || network.bssid.localizedCaseInsensitiveContains(query)
+            network.displaySSID(language: appLanguage).localizedCaseInsensitiveContains(query)
+                || network.displayBSSID(language: appLanguage).localizedCaseInsensitiveContains(query)
         }
     }
 
@@ -62,7 +67,7 @@ struct ContentView: View {
                     }
                     .disabled(scanner.state == .scanning)
                     .help("Refresh")
-                    .accessibilityLabel(scanner.state == .scanning ? "Scanning" : "Refresh")
+                    .accessibilityLabel(scanner.state == .scanning ? Text("Scanning") : Text("Refresh"))
                 }
             }
         }
@@ -71,6 +76,7 @@ struct ContentView: View {
         .task {
             scanner.scan()
         }
+        .environment(\.locale, appLanguage.locale)
     }
 
     @ViewBuilder
@@ -97,6 +103,7 @@ struct ContentView: View {
                 HStack(spacing: 10) {
                     summaryItem(
                         title: "All Networks",
+                        id: "all-networks",
                         value: "\(scanner.networks.count)",
                         systemImage: "wifi",
                         isSelected: selectedBand == nil
@@ -106,6 +113,7 @@ struct ContentView: View {
 
                     summaryItem(
                         title: "2.4 GHz",
+                        id: "2ghz",
                         value: "\(count(for: .band2GHz))",
                         systemImage: "dot.radiowaves.left.and.right",
                         isSelected: selectedBand == .band2GHz
@@ -115,6 +123,7 @@ struct ContentView: View {
 
                     summaryItem(
                         title: "5 GHz",
+                        id: "5ghz",
                         value: "\(count(for: .band5GHz))",
                         systemImage: "dot.radiowaves.left.and.right",
                         isSelected: selectedBand == .band5GHz
@@ -124,6 +133,7 @@ struct ContentView: View {
 
                     summaryItem(
                         title: "6 GHz",
+                        id: "6ghz",
                         value: "\(count(for: .band6GHz))",
                         systemImage: "dot.radiowaves.left.and.right",
                         isSelected: selectedBand == .band6GHz
@@ -136,16 +146,16 @@ struct ContentView: View {
             Spacer()
 
             VStack(alignment: .trailing, spacing: 4) {
-                Text(scanner.state.message)
+                Text(scanner.state.message(language: appLanguage))
                     .font(.callout.weight(.medium))
                     .foregroundStyle(statusColor)
 
                 if let lastUpdatedAt = scanner.lastUpdatedAt {
-                    Text("Updated \(lastUpdatedAt.formatted(date: .omitted, time: .standard))")
+                    Text(updatedText(for: lastUpdatedAt))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else if let activeInterfaceName = scanner.activeInterfaceName {
-                    Text("Interface \(activeInterfaceName)")
+                    Text(interfaceText(for: activeInterfaceName))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
@@ -164,7 +174,7 @@ struct ContentView: View {
             TableColumn("SSID", value: \.displaySSID) { network in
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(network.displaySSID)
+                        Text(network.displaySSID(language: appLanguage))
                             .fontWeight(.medium)
                             .lineLimit(1)
 
@@ -173,7 +183,7 @@ struct ContentView: View {
                         }
                     }
 
-                    Text(network.bssid)
+                    Text(network.displayBSSID(language: appLanguage))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .textSelection(.enabled)
@@ -183,7 +193,7 @@ struct ContentView: View {
             .width(min: 220, ideal: 280)
 
             TableColumn("Signal", value: \.rssi) { network in
-                SignalStrengthView(network: network)
+                SignalStrengthView(network: network, language: appLanguage)
             }
             .width(min: 130, ideal: 150)
 
@@ -194,12 +204,12 @@ struct ContentView: View {
             .width(min: 80, ideal: 90)
 
             TableColumn("Band", value: \.sortBand) { network in
-                Text(network.band.rawValue)
+                Text(network.band.localizedDescription(language: appLanguage))
             }
             .width(min: 80, ideal: 90)
 
             TableColumn("Security", value: \.securityDescription) { network in
-                SecurityLabel(network: network)
+                SecurityLabel(network: network, language: appLanguage)
             }
             .width(min: 150, ideal: 190)
         }
@@ -227,34 +237,34 @@ struct ContentView: View {
     private var emptyTitle: String {
         switch scanner.state {
         case .idle:
-            return "Ready to Scan"
+            return String(localized: "empty.ready.title", bundle: appLanguage.localizationBundle)
         case .scanning:
-            return "Scanning for Networks"
+            return String(localized: "empty.scanning.title", bundle: appLanguage.localizationBundle)
         case .empty:
-            return "No Networks Found"
+            return String(localized: "empty.no_networks.title", bundle: appLanguage.localizationBundle)
         case .failed:
-            return "Scan Failed"
+            return String(localized: "empty.failed.title", bundle: appLanguage.localizationBundle)
         case .success:
-            return "No Networks Found"
+            return String(localized: "empty.no_networks.title", bundle: appLanguage.localizationBundle)
         }
     }
 
     private var emptyDescription: String {
         switch scanner.state {
         case .idle:
-            return "Click Refresh to scan nearby Wi-Fi networks."
+            return String(localized: "empty.ready.description", bundle: appLanguage.localizationBundle)
         case .scanning:
-            return "Nearby Wi-Fi networks will appear here."
+            return String(localized: "empty.scanning.description", bundle: appLanguage.localizationBundle)
         case .empty:
             return scanner.locationAuthorizationStatus.allowsWiFiDetails
-                ? "Check that Wi-Fi is on. macOS did not return any nearby networks."
-                : "Allow Location Services for this app so macOS can expose SSID and BSSID details."
-        case .failed(let message):
+                ? String(localized: "empty.no_networks.description", bundle: appLanguage.localizationBundle)
+                : String(localized: "empty.location_needed.description", bundle: appLanguage.localizationBundle)
+        case .failed(let failure):
             return scanner.locationAuthorizationStatus.requiresManualLocationAccess
-                ? "Enable Location Services for Wi-Fi Analyzer in System Settings, then return here and refresh."
-                : message
+                ? String(localized: "empty.location_settings.description", bundle: appLanguage.localizationBundle)
+                : failure.message(language: appLanguage)
         case .success:
-            return "No nearby networks were returned by macOS."
+            return String(localized: "empty.success_no_networks.description", bundle: appLanguage.localizationBundle)
         }
     }
 
@@ -285,8 +295,26 @@ struct ContentView: View {
     }
 
     private func channelText(for network: WiFiNetwork) -> String {
-        guard let channel = network.channel else { return "Unknown" }
+        guard let channel = network.channel else {
+            return String(localized: "channel.unknown", bundle: appLanguage.localizationBundle)
+        }
         return "\(channel)"
+    }
+
+    private func updatedText(for date: Date) -> String {
+        String(
+            format: String(localized: "status.updated.format", bundle: appLanguage.localizationBundle),
+            locale: appLanguage.locale,
+            arguments: [date.formatted(date: .omitted, time: .standard)]
+        )
+    }
+
+    private func interfaceText(for interfaceName: String) -> String {
+        String(
+            format: String(localized: "status.interface.format", bundle: appLanguage.localizationBundle),
+            locale: appLanguage.locale,
+            arguments: [interfaceName]
+        )
     }
 
     private func openLocationSettings() {
@@ -298,7 +326,8 @@ struct ContentView: View {
     }
 
     private func summaryItem(
-        title: String,
+        title: LocalizedStringResource,
+        id: String,
         value: String,
         systemImage: String,
         isSelected: Bool,
@@ -343,9 +372,10 @@ struct ContentView: View {
                 )
         }
         .shadow(color: isSelected ? Color.accentColor.opacity(0.16) : .clear, radius: 8, y: 2)
-        .glassEffectID(title, in: filterGlassNamespace)
+        .glassEffectID(id, in: filterGlassNamespace)
         .glassEffectTransition(.matchedGeometry)
-        .accessibilityLabel("\(title), \(value)")
+        .accessibilityLabel(Text(title))
+        .accessibilityValue(value)
     }
 }
 
@@ -367,15 +397,16 @@ private struct ConnectedBadge: View {
 
 private struct SignalStrengthView: View {
     let network: WiFiNetwork
+    let language: AppLanguage
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Text("\(network.rssi) dBm")
+                Text(verbatim: "\(network.rssi) dBm")
                     .monospacedDigit()
                     .fontWeight(.medium)
 
-                Text(network.signalQuality.rawValue)
+                Text(network.signalQuality.localizedDescription(language: language))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -407,13 +438,14 @@ private struct SignalStrengthView: View {
 
 private struct SecurityLabel: View {
     let network: WiFiNetwork
+    let language: AppLanguage
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(network.securityDescription)
-                .fontWeight(network.securityDetail == nil ? .regular : .medium)
+            Text(network.localizedSecurityDescription(language: language))
+                .fontWeight(network.securityDetail(language: language) == nil ? .regular : .medium)
 
-            if let securityDetail = network.securityDetail {
+            if let securityDetail = network.securityDetail(language: language) {
                 Text(securityDetail)
                     .font(.caption)
                     .foregroundStyle(.secondary)

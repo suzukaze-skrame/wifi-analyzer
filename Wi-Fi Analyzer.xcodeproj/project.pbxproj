@@ -91,6 +91,7 @@
 			knownRegions = (
 				en,
 				Base,
+				"zh-Hans",
 			);
 			mainGroup = A54A99F92FDAB31A00D55BD0;
 			minimizedProjectReferenceProxies = 1;
@@ -257,6 +258,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Wi-Fi Analyzer";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSLocationUsageDescription = "Wi-Fi Analyzer uses location permission so macOS can expose nearby Wi-Fi SSID and BSSID details.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Wi-Fi Analyzer uses location permission so macOS can expose nearby Wi-Fi SSID and BSSID details.";
@@ -292,6 +294,7 @@
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Wi-Fi Analyzer";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSLocationUsageDescription = "Wi-Fi Analyzer uses location permission so macOS can expose nearby Wi-Fi SSID and BSSID details.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Wi-Fi Analyzer uses location permission so macOS can expose nearby Wi-Fi SSID and BSSID details.";

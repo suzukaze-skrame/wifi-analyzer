@@ -10,20 +10,53 @@ final class WiFiScanner: NSObject, ObservableObject {
         case scanning
         case success
         case empty
-        case failed(String)
+        case failed(Failure)
 
-        var message: String {
+        enum Failure: Equatable, Sendable {
+            case locationPermissionOff
+            case coreWLANFailure
+            case noWiFiInterface
+            case interfaceOpenFailed([String])
+            case wifiPoweredOff
+            case system(String)
+
+            func message(language: AppLanguage) -> String {
+                switch self {
+                case .locationPermissionOff:
+                    return String(localized: "scanner.error.location_permission_off", bundle: language.localizationBundle)
+                case .coreWLANFailure:
+                    return String(localized: "scanner.error.corewlan_failure", bundle: language.localizationBundle)
+                case .noWiFiInterface:
+                    return String(localized: "scanner.error.no_wifi_interface", bundle: language.localizationBundle)
+                case .interfaceOpenFailed(let interfaceNames):
+                    return String(
+                        format: String(
+                            localized: "scanner.error.interface_open_failed.format",
+                            bundle: language.localizationBundle
+                        ),
+                        locale: language.locale,
+                        arguments: [interfaceNames.joined(separator: ", ")]
+                    )
+                case .wifiPoweredOff:
+                    return String(localized: "scanner.error.wifi_powered_off", bundle: language.localizationBundle)
+                case .system(let message):
+                    return message
+                }
+            }
+        }
+
+        func message(language: AppLanguage) -> String {
             switch self {
             case .idle:
-                return "Ready"
+                return String(localized: "scanner.state.ready", bundle: language.localizationBundle)
             case .scanning:
-                return "Scanning..."
+                return String(localized: "scanner.state.scanning", bundle: language.localizationBundle)
             case .success:
-                return "Scan complete"
+                return String(localized: "scanner.state.success", bundle: language.localizationBundle)
             case .empty:
-                return "No networks found"
-            case .failed(let message):
-                return message
+                return String(localized: "scanner.state.empty", bundle: language.localizationBundle)
+            case .failed(let failure):
+                return failure.message(language: language)
             }
         }
     }
@@ -53,7 +86,7 @@ final class WiFiScanner: NSObject, ObservableObject {
         }
 
         guard locationAuthorizationStatus.allowsWiFiDetails else {
-            state = .failed("Location permission is off. Enable Location Services for this app in System Settings.")
+            state = .failed(.locationPermissionOff)
             return
         }
 
@@ -69,7 +102,7 @@ final class WiFiScanner: NSObject, ObservableObject {
                 self.lastUpdatedAt = Date()
                 self.state = result.networks.isEmpty ? .empty : .success
             } catch {
-                self.state = .failed(Self.message(for: error))
+                self.state = .failed(Self.failure(for: error))
             }
         }
     }
@@ -97,7 +130,7 @@ final class WiFiScanner: NSObject, ObservableObject {
         let networks = scannedNetworks
             .map { network in
                 let ssid = network.ssid ?? ""
-                let bssid = network.bssid ?? "Unknown"
+                let bssid = network.bssid ?? ""
                 let isConnected = Self.isConnectedNetwork(
                     bssid: bssid,
                     connectedBSSID: connectedBSSID
@@ -129,7 +162,7 @@ final class WiFiScanner: NSObject, ObservableObject {
 
         return ScanResult(
             networks: networks,
-            interfaceName: interface.interfaceName ?? "Unknown"
+            interfaceName: interface.interfaceName
         )
     }
 
@@ -166,23 +199,30 @@ final class WiFiScanner: NSObject, ObservableObject {
         return bssid.caseInsensitiveCompare(connectedBSSID) == .orderedSame
     }
 
-    nonisolated private static func message(for error: Error) -> String {
+    nonisolated private static func failure(for error: Error) -> ScanState.Failure {
         if let scanError = error as? WiFiScanError {
-            return scanError.localizedDescription
+            switch scanError {
+            case .noWiFiInterface(let interfaceNames):
+                return interfaceNames.isEmpty
+                    ? .noWiFiInterface
+                    : .interfaceOpenFailed(interfaceNames)
+            case .wifiPoweredOff:
+                return .wifiPoweredOff
+            }
         }
 
         let nsError = error as NSError
         if nsError.domain == CWErrorDomain {
-            return "Wi-Fi scan failed. Check Location Services and Wi-Fi permissions."
+            return .coreWLANFailure
         }
 
-        return error.localizedDescription
+        return .system(error.localizedDescription)
     }
 }
 
 private struct ScanResult: Sendable {
     let networks: [WiFiNetwork]
-    let interfaceName: String
+    let interfaceName: String?
 }
 
 extension WiFiScanner: CLLocationManagerDelegate {
@@ -222,22 +262,9 @@ extension CLAuthorizationStatus {
     }
 }
 
-private enum WiFiScanError: LocalizedError {
+private enum WiFiScanError: Error {
     case noWiFiInterface(interfaceNames: [String])
     case wifiPoweredOff
-
-    var errorDescription: String? {
-        switch self {
-        case .noWiFiInterface(let interfaceNames):
-            if interfaceNames.isEmpty {
-                return "No Wi-Fi interface was found. If this Mac has Wi-Fi, CoreWLAN did not expose it to the app."
-            }
-
-            return "CoreWLAN found interface names (\(interfaceNames.joined(separator: ", "))) but could not open a Wi-Fi interface."
-        case .wifiPoweredOff:
-            return "Wi-Fi is turned off."
-        }
-    }
 }
 
 private extension WiFiBand {
